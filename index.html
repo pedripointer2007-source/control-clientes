@@ -392,6 +392,34 @@
   </div>
 
   <script>
+
+    const API_URL = "https://script.google.com/macros/s/AKfycbzFy1XuiSjE_5bfPpwr_g9CIg33OeJ1xJoNhXjDAPvDdmjDu4aqMw2wklQ0MEJfumBUoA/exec";
+
+    async function saveToSheets(data) {
+      try {
+        await fetch(API_URL, {
+          method: "POST",
+          body: JSON.stringify(data),
+        });
+      } catch (error) {
+        alert("Error al guardar en Sheets");
+        console.error(error);
+      }
+    }
+
+    async function loadFromSheets() {
+      try {
+        const res = await fetch(API_URL);
+        const data = await res.json();
+
+        clients = data; // guardas lo que viene de Sheets
+        renderJobs();
+
+      } catch (error) {
+        console.error("Error cargando datos:", error);
+      }
+    }
+
     const USER = "valverdezapata";
     const PASS = "45.30.38";
     const SERVICES = [
@@ -405,14 +433,11 @@
       { name: "Video", price: 0 }
     ];
 
-    let clients = JSON.parse(localStorage.getItem("clients")) || [];
+    let clients = [];
     let currentId = null;
     let currentServiceData = [];
     let currentDates = { inicio: "", final: "" };
 
-    function saveAll() {
-      localStorage.setItem("clients", JSON.stringify(clients));
-    }
 
     function login() {
       const u = document.getElementById("loginUser").value.trim();
@@ -552,56 +577,57 @@
       alert("Fechas guardadas correctamente.");
     }
 
-    function guardarCliente() {
-      if (!currentId) {
-        alert("Primero presiona 'Nuevo cliente'.");
-        return;
-      }
+    async function guardarCliente() {
+  if (!currentId) {
+    alert("Primero presiona 'Nuevo cliente'.");
+    return;
+  }
 
-      const nombre = document.getElementById("clienteNombre").value.trim();
-      const apellido = document.getElementById("clienteApellido").value.trim();
-      const telefono = document.getElementById("clienteTelefono").value.trim();
-      const descripcion = document.getElementById("clienteDescripcion").value.trim();
+  const nombre = document.getElementById("clienteNombre").value.trim();
+  const apellido = document.getElementById("clienteApellido").value.trim();
+  const telefono = document.getElementById("clienteTelefono").value.trim();
+  const descripcion = document.getElementById("clienteDescripcion").value.trim();
 
-      if (!nombre || !apellido || !telefono || !descripcion) {
-        alert("Completa todos los campos del cliente.");
-        return;
-      }
+  if (!nombre || !apellido || !telefono || !descripcion) {
+    alert("Completa todos los campos.");
+    return;
+  }
 
-      const serviceData = getServiceSelection();
+  const serviceData = getServiceSelection();
 
-      if (serviceData.length === 0) {
-        alert("Debes seleccionar al menos un servicio.");
-        return;
-      }
+  if (serviceData.length === 0) {
+    alert("Selecciona al menos un servicio.");
+    return;
+  }
 
-      const total = serviceData.reduce((sum, s) => sum + (Number(s.price) * Number(s.quantity)), 0);
+  const total = serviceData.reduce((sum, s) => sum + (s.price * s.quantity), 0);
 
-      clients.push({
-        id: currentId,
-        nombre,
-        apellido,
-        telefono,
-        descripcion,
-        serviceData: JSON.parse(JSON.stringify(serviceData)),
-        fechaInicio: document.getElementById("fechaInicio").value,
-        fechaFinal: document.getElementById("fechaFinal").value,
-        total: total,
-        createdAt: new Date().toISOString()
-      });
+  const newClient = {
+    id: currentId,
+    nombre,
+    apellido,
+    telefono,
+    descripcion,
+    servicio: serviceData.map(s => `${s.name} x${s.quantity}`).join(", "),
+    total,
+    fechaInicio: document.getElementById("fechaInicio").value,
+    fechaFinal: document.getElementById("fechaFinal").value
+  };
 
-      saveAll();
-      renderJobs();
-      alert("Cliente guardado correctamente.");
+  await saveToSheets(newClient);
 
-      currentId = null;
-      currentServiceData = [];
-      resetClientForm();
-      clearServiceInputs();
-      document.getElementById("fechaInicio").value = "";
-      document.getElementById("fechaFinal").value = "";
-      renderServiceSummary();
-    }
+  clients.push(newClient);
+  renderJobs();
+
+  alert("Guardado en Google Sheets ✅");
+
+  // limpiar
+  currentId = null;
+  resetClientForm();
+  clearServiceInputs();
+  document.getElementById("fechaInicio").value = "";
+  document.getElementById("fechaFinal").value = "";
+}
 
     function resetClientForm() {
       document.getElementById("clienteId").value = "";
@@ -635,28 +661,17 @@
         return;
       }
 
-      clients.forEach((c, index) => {
-        const serviceData = Array.isArray(c.serviceData) ? c.serviceData : [];
-        const total = Number(c.total ?? serviceData.reduce((sum, s) => sum + (Number(s.price) * Number(s.quantity)), 0));
-        const serviciosTexto = serviceData.length
-          ? serviceData.map(s => `${s.name} x${s.quantity} = ₡${Number(s.price) * Number(s.quantity)}`).join("<br>")
-          : "Sin servicio seleccionado";
-
-        const cantidadTotal = serviceData.reduce((sum, s) => sum + Number(s.quantity), 0);
-        const precioUnidad = serviceData.length
-          ? serviceData.map(s => `₡${s.price}`).join(", ")
-          : "-";
-
+      clients.forEach((c) => {
         tbody.innerHTML += `
-          <tr oncontextmenu="deleteClient(event, ${index})">
+          <tr>
             <td>${c.id}</td>
             <td>${c.nombre} ${c.apellido}</td>
-            <td>${serviciosTexto}</td>
-            <td>${cantidadTotal}</td>
-            <td>${precioUnidad}</td>
-            <td>₡ ${total.toFixed(2)}</td>
+            <td>${c.servicio || "-"}</td>
+            <td>-</td>
+            <td>-</td>
+            <td>₡ ${c.total}</td>
             <td>${c.fechaInicio || "-"} / ${c.fechaFinal || "-"}</td>
-            <td><button class="btn btn-danger" onclick="deleteClientByButton(${index})">Eliminar</button></td>
+            <td>-</td>
           </tr>
         `;
       });
@@ -682,7 +697,7 @@
     window.onload = function() {
       resetClientForm();
       renderServices();
-      renderJobs();
+      loadFromSheets();
     };
   </script>
 </body>
