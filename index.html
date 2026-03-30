@@ -393,14 +393,21 @@
 
   <script>
 
-    const API_URL = "https://script.google.com/macros/s/AKfycbzFy1XuiSjE_5bfPpwr_g9CIg33OeJ1xJoNhXjDAPvDdmjDu4aqMw2wklQ0MEJfumBUoA/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbwe34w_bHDX3y2W9OO_6HmkrRZe_SqeJIw1KDeq_uqpZ1CyLgunEH-iOzJ_Nhm6cYRAww/exec";
 
     async function saveToSheets(data) {
       try {
-        await fetch(API_URL, {
+        const res = await fetch(API_URL, {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
           body: JSON.stringify(data),
         });
+
+        const result = await res.json();
+        console.log(result);
+
       } catch (error) {
         alert("Error al guardar en Sheets");
         console.error(error);
